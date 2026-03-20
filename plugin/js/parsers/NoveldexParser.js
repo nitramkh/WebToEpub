@@ -53,45 +53,12 @@ class NoveldexParser extends Parser { // eslint-disable-line no-unused-vars
          * @param { Document } dom
          */
         const extractChapters = (dom) => {
-            /**
-             * Main path: Only works on fully loaded pages, I.E. the page the
-             * user triggers the extension on.
-             */
-
-            /**
-             * SVG check excludes all locked chapters.
-             * 
-             * @type { NodeListOf<HTMLAnchorElement> }
-             */
-            const chapterLinksElements = dom.querySelectorAll("div[id] div[data-state] a[href*='chapter']:not(:has(svg.lucide-lock))");
-
-            const chapterLinks = Array.from(chapterLinksElements, a => {
-                /**
-                 * The separate the queries are needed because the first-of-type
-                 * doesn't work in an all selector when the spans are are nested.
-                 * 
-                 * @type { NodeListOf<HTMLSpanElement> }
-                 */
-                const titleSpans = a.querySelector("div:first-of-type").querySelectorAll("span");
-
-                return {
-                    sourceUrl: a.href,
-                    title: Array.from(titleSpans, span => span.innerText.trim()).join(" ")
-                };
-            });
-
-            if (chapterLinks.length > 0)
-                return chapterLinks;
-
-            /**
-             * Secondary path: Only works on pages on non-loaded pages, I.E. all
-             * xhr requested pages. Unfortunately, this doesn't work on loaded
-             * pages because the data is removed from the dom; so the split path
-             * is needed.
-             */
-
             const foundChaptersList = /\\"chapters\\":(\[(?:\{[^\]]+\})*\])/.exec(dom.body.innerHTML)?.[1];
 
+            /**
+             * Either we are on a loaded page with missing JSON blobs which will
+             * be refetched to get an unloaded version, or somethings broken.
+             */
             if (foundChaptersList == null)
                 return null;
 
@@ -129,7 +96,7 @@ class NoveldexParser extends Parser { // eslint-disable-line no-unused-vars
                 .map(chapter => {
                     return {
                         // NOTE: Hard-code very bad but not worth fixing.
-                        sourceUrl: `${ dom.baseURI }/chapter/${chapter.number}`,
+                        sourceUrl: `${ dom.baseURI.replace(/\?.*$/, "") }/chapter/${chapter.number}`,
                         title: `Chapter ${ chapter.number } - ${ chapter.title }`
                     };
                 });
@@ -141,40 +108,30 @@ class NoveldexParser extends Parser { // eslint-disable-line no-unused-vars
          * @param { Document } dom 
          */
         const nextTocPageUrl = (dom) => {
-            /**
-             * Main path: Only works on fully loaded pages, I.E. the page the
-             * user triggers the extension on.
-             */
-
-            /**
-             * @type { HTMLAnchorElement }
-             */
-            const anchor = dom.querySelector("div > div + a[href*='page=']");
-
-            if (anchor != null) {
-                /**
-                 * Check if there is a next page, since anchor will have the
-                 * href set regardless.
-                 */
-                if (anchor.querySelector("button").disabled)
-                    return null;
-
-                return anchor.href;
-            }
-
-            /**
-             * Secondary path: Only works on pages on non-loaded pages, I.E. all
-             * xhr requested pages. Unfortunately, this doesn't work on loaded
-             * pages because the data is removed from the dom; so the split path
-             * is needed.
-             */
-
             const foundCurrent = /\\"currentPage\\":(\d+),/.exec(dom.body.innerHTML)?.[1];
             const foundTotal = /\\"totalPages\\":(\d+),/.exec(dom.body.innerHTML)?.[1];
 
-            // Somethings broken so just give gracefully.
-            if (foundCurrent == null || foundTotal == null)
+            // Either we're on a loaded page, or something broken.
+            if (foundCurrent == null || foundTotal == null) {
+                // Check what page we are currently on.
+                const pageCheck = /\?.*page=(\d+)/.exec(dom.baseURI);
+
+                /**
+                 * If this is the main page; short-circuit and refetch it to get
+                 * an unloaded page which contains the expected values/formats;
+                 * instead of having a split path.
+                 * 
+                 * I've noted some inconsistencies on this page where
+                 * occasionally some JSON blobs are missing from a loaded page,
+                 * but XHR/fetched pages are not built-out and have not had any
+                 * issues yet. The chapter data in JSON blobs.
+                 */
+                if (pageCheck == null || pageCheck[1] === "1")
+                    return dom.baseURI;
+
+                // Somethings broken so fail gracefully.
                 return null;
+            }
 
             // Count starts at 1.
             const current = parseInt(foundCurrent);
@@ -184,8 +141,10 @@ class NoveldexParser extends Parser { // eslint-disable-line no-unused-vars
             if (current >= total)
                 return null;
 
-            // Replace old page number with new one.
-            const url = dom.baseURI.replace(/((?:\?|&)page=)\d+/, (_, prefix) => prefix + (current + 1));
+            // Replace old page number with new one; or append it.
+            const url = dom.baseURI.includes("?")
+                ? dom.baseURI.replace(/(?:\?.*?)?(\?|&)(page=)\d+/, (_, symbol, prefix) => symbol + prefix + (current + 1))
+                : `${ dom.baseURI }?page=${ current + 1}`;
 
             return url;
         };
