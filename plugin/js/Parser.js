@@ -425,7 +425,7 @@ class Parser {
         let chapter = {
             sourceUrl: this.state.chapterListUrl,
             title: titleText,
-            newArch: null
+            newArc: null
         };
         return new ChapterEpubItem(chapter, {childNodes: childNodes}, 0);
     }
