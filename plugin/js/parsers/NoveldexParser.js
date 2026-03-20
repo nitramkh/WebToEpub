@@ -45,32 +45,159 @@ class NoveldexParser extends Parser { // eslint-disable-line no-unused-vars
     }
 
     /**
-     * @param { Document } dom
+     * @param { Document } dom 
+     * @param { ChapterUrlsUI } chapterUrlsUI
      */
-    async getChapterUrls(dom) {
+    async getChapterUrls(dom, chapterUrlsUI) {
         /**
-         * SVG check excludes all locked chapters.
-         * 
-         * @type { NodeListOf<HTMLAnchorElement> }
+         * @param { Document } dom
          */
-        const chapterLinksElements = dom.querySelectorAll("div[id] div[data-state] a[href*='chapter']:not(:has(svg.lucide-lock))");
-
-        const chapterLinks = Array.from(chapterLinksElements, a => {
+        const extractChapters = (dom) => {
             /**
-             * The separate the queries are needed because the first-of-type
-             * doesn't work in an all selector when the spans are are nested.
-             * 
-             * @type { NodeListOf<HTMLSpanElement> }
+             * Main path: Only works on fully loaded pages, I.E. the page the
+             * user triggers the extension on.
              */
-            const titleSpans = a.querySelector("div:first-of-type").querySelectorAll("span");
 
-            return {
-                sourceUrl: a.href,
-                title: Array.from(titleSpans, span => span.innerText.trim()).join(" ")
-            };
-        });
+            /**
+             * SVG check excludes all locked chapters.
+             * 
+             * @type { NodeListOf<HTMLAnchorElement> }
+             */
+            const chapterLinksElements = dom.querySelectorAll("div[id] div[data-state] a[href*='chapter']:not(:has(svg.lucide-lock))");
 
-        return chapterLinks;
+            const chapterLinks = Array.from(chapterLinksElements, a => {
+                /**
+                 * The separate the queries are needed because the first-of-type
+                 * doesn't work in an all selector when the spans are are nested.
+                 * 
+                 * @type { NodeListOf<HTMLSpanElement> }
+                 */
+                const titleSpans = a.querySelector("div:first-of-type").querySelectorAll("span");
+
+                return {
+                    sourceUrl: a.href,
+                    title: Array.from(titleSpans, span => span.innerText.trim()).join(" ")
+                };
+            });
+
+            if (chapterLinks.length > 0)
+                return chapterLinks;
+
+            /**
+             * Secondary path: Only works on pages on non-loaded pages, I.E. all
+             * xhr requested pages. Unfortunately, this doesn't work on loaded
+             * pages because the data is removed from the dom; so the split path
+             * is needed.
+             */
+
+            const foundChaptersList = /\\"chapters\\":(\[(?:\{[^\]]+\})*\])/.exec(dom.body.innerHTML)?.[1];
+
+            if (foundChaptersList == null)
+                return null;
+
+            /** @type { Array<object> } */
+            let parsedChapters;
+
+            /**
+             * The chapters are stored as a stringified JSON inside a string,
+             * therefore we must parse it twice, first to unescape the string;
+             * then to actually parse the JSON.
+             */
+            try { parsedChapters = (JSON.parse(JSON.parse(`"${ foundChaptersList }"`))); }
+            catch (e) {  } // eslint-disable-line no-empty
+
+            const chapters = parsedChapters.map(entry => {
+                if (
+                    entry == null
+                    || typeof entry !== "object"
+                    || entry["number"] == null
+                    || typeof entry["number"] !== "number"
+                    || entry["title"] == null
+                    || typeof entry["title"] !== "string"
+                    || entry["isLocked"] == null
+                    || typeof entry["isLocked"] !== "boolean"
+                )
+                    return null;
+ 
+                return {
+                    number: entry["number"],
+                    title: entry["title"],
+                    locked: entry["isLocked"]
+                };
+            })
+                .filter(chapter => chapter != null && !chapter.locked)
+                .map(chapter => {
+                    return {
+                        // NOTE: Hard-code very bad but not worth fixing.
+                        sourceUrl: `${ dom.baseURI }/chapter/${chapter.number}`,
+                        title: `Chapter ${ chapter.number } - ${ chapter.title }`
+                    };
+                });
+
+            return chapters;
+        };
+
+        /**
+         * @param { Document } dom 
+         */
+        const nextTocPageUrl = (dom) => {
+            /**
+             * Main path: Only works on fully loaded pages, I.E. the page the
+             * user triggers the extension on.
+             */
+
+            /**
+             * @type { HTMLAnchorElement }
+             */
+            const anchor = dom.querySelector("div > div + a[href*='page=']");
+
+            if (anchor != null) {
+                /**
+                 * Check if there is a next page, since anchor will have the
+                 * href set regardless.
+                 */
+                if (anchor.querySelector("button").disabled)
+                    return null;
+
+                return anchor.href;
+            }
+
+            /**
+             * Secondary path: Only works on pages on non-loaded pages, I.E. all
+             * xhr requested pages. Unfortunately, this doesn't work on loaded
+             * pages because the data is removed from the dom; so the split path
+             * is needed.
+             */
+
+            const foundCurrent = /\\"currentPage\\":(\d+),/.exec(dom.body.innerHTML)?.[1];
+            const foundTotal = /\\"totalPages\\":(\d+),/.exec(dom.body.innerHTML)?.[1];
+
+            // Somethings broken so just give gracefully.
+            if (foundCurrent == null || foundTotal == null)
+                return null;
+
+            // Count starts at 1.
+            const current = parseInt(foundCurrent);
+            const total = parseInt(foundTotal);
+
+            // Previous page was the final one.
+            if (current >= total)
+                return null;
+
+            // Replace old page number with new one.
+            const url = dom.baseURI.replace(/((?:\?|&)page=)\d+/, (_, prefix) => prefix + (current + 1));
+
+            return url;
+        };
+
+        const chapters =  await this.walkTocPages(
+            dom,
+            extractChapters,
+            nextTocPageUrl,
+            chapterUrlsUI
+        );
+
+        return chapters;
     }
 
     /**
