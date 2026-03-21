@@ -8,16 +8,12 @@ var main = (function() { // eslint-disable-line no-unused-vars
     // this will be called when message listener fires
     function onMessageListener(message, sender, sendResponse) {  // eslint-disable-line no-unused-vars
         if (message.messageType == "ParseResults") {
-            setUIWorkingState(true);
-
             chrome.runtime.onMessage.removeListener(onMessageListener);
             util.log("addListener");
             util.log(message);
             // convert the string returned from content script back into a DOM
             let dom = new DOMParser().parseFromString(message.document, "text/html");
             populateControlsWithDom(message.url, dom);
-
-            setUIWorkingState(false);
         }
     }
 
@@ -214,9 +210,9 @@ var main = (function() { // eslint-disable-line no-unused-vars
 
         // Swap library buttons.
         let el = document.getElementById("LibAddToLibrary");
-        el.hidden = isWorking;
+        el.hidden = !el.hidden;
         el = document.getElementById("LibPauseToLibrary");
-        el.hidden = !isWorking;
+        el.hidden = !el.hidden;
 
         /**
          * Disable all UI except pause to library.
@@ -673,7 +669,6 @@ var main = (function() { // eslint-disable-line no-unused-vars
     };
 
     return {
-        getPackEpubButton: getPackEpubButton,
         onLoadAndAnalyseButtonClick : onLoadAndAnalyseButtonClick,
         fetchContentAndPackEpub: fetchContentAndPackEpub,
         resetUI: resetUI,
