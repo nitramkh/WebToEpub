@@ -389,11 +389,23 @@ var main = (function() {
     }
 
     function getPackEpubButton() {
-        return document.getElementById("packEpubButton");
+        const button = document.getElementById("packEpubButton");
+
+        if (button.tagName !== "BUTTON") {
+            throw new Error(`Not a button. Found: ${button.tagName}`);
+        }
+
+        return /** @type { HTMLButtonElement } */ (button);
     }
 
     function getLoadAndAnalyseButton() {
-        return document.getElementById("loadAndAnalyseButton");
+        const button = document.getElementById("loadAndAnalyseButton");
+
+        if (button.tagName !== "BUTTON") {
+            throw new Error(`Not a button. Found: ${button.tagName}`);
+        }
+
+        return /** @type { HTMLButtonElement } */ (button);
     }
 
     function resetUI() {
