@@ -525,7 +525,6 @@ class Parser {
     }
 
     setUiToShowLoadingProgress(length) {
-        main.getPackEpubButton().disabled = true;
         ProgressBar.setMax(length + 1);
         ProgressBar.setValue(1);
     }

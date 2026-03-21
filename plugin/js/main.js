@@ -673,7 +673,6 @@ var main = (function() { // eslint-disable-line no-unused-vars
     };
 
     return {
-        getPackEpubButton: getPackEpubButton,
         onLoadAndAnalyseButtonClick : onLoadAndAnalyseButtonClick,
         fetchContentAndPackEpub: fetchContentAndPackEpub,
         resetUI: resetUI,
