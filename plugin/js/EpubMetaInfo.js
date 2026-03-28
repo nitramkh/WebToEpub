@@ -1,19 +1,119 @@
-/*
-    Wrapper for EPUB information
-*/
-
 "use strict";
 
-/*
-    Any EPUB we create should have following info
-    <param name="uuid" type="string">identifier for this EPUB.  (i.e. "origin" URL story was downloaded from)</param>
-    <param name="title" type="string">The Title of the story</param>
-    <param name="author" type="string">The writer of the story</param>
-    <param name="language" type="string">Language code of story. Defaults to "en" (English)</param>
-    <param name="seriesName" type="string">If book is part of series, has name of series.  null if not part of a series</param>
-    <param name="seriesIndex" type="string">If book is part of series, has index of book in series.  null if not part of a series</param>
-*/
+/**
+ * Wrapper for EPUB information.
+ * 
+ * Any EPUB we create should have following info
+ * <param name="uuid" type="string">identifier for this EPUB.  (i.e. "origin" URL story was downloaded from)</param>
+ * <param name="title" type="string">The Title of the story</param>
+ * <param name="author" type="string">The writer of the story</param>
+ * <param name="language" type="string">Language code of story. Defaults to "en" (English)</param>
+ * <param name="seriesName" type="string">If book is part of series, has name of series.  null if not part of a series</param>
+ * <param name="seriesIndex" type="string">If book is part of series, has index of book in series.  null if not part of a series</param>
+ */
 class EpubMetaInfo {
+    /**
+     * Unique identifier for EPUB. Usually the URL of the main ToC page, but
+     * defaults to a localized string message.
+     * 
+     * @type { string }
+     * @public
+     */
+    uuid;
+
+    /**
+     * The title of the EPUB.
+     * 
+     * @type { string }
+     * @public
+     */
+    title;
+
+    /**
+     * The author of the EPUB/novel; defaults to unknown.
+     * 
+     * @type { string }
+     * @public
+     */
+    author;
+
+    /**
+     * The language the novel is in; defaults to english.
+     * 
+     * @type { string }
+     * @public
+     */
+    language;
+
+    /**
+     * The filename to use for the EPUB; defaults to "web.epub".
+     * 
+     * @type { FilenameString }
+     * @public
+     */
+    fileName;
+
+    /**
+     * The subject/tag line of the EPUB/novel; defaults to empty.
+     * 
+     * @type { string }
+     * @public
+     */
+    subject;
+
+    /**
+     * The description of the EPUB/novel; defaults to empty.
+     * 
+     * @type { string }
+     * @public
+     */
+    description;
+
+    /**
+     * The name of the series, or null if not part of a series.
+     * 
+     * @type { string | null }
+     * @public
+     */
+    seriesName;
+
+    /**
+     * The volume of the series, it is probably a number but doesn't have to be;
+     * or null if not set.
+     * 
+     * @type { string | null }
+     * @public
+     */
+    seriesIndex;
+
+    /**
+     * The stylesheet to use in the EPUB as a string; defaults to
+     * `EpubMetaInfo.getDefaultStyleSheet`.
+     * 
+     * @type { string }
+     * @public
+     */
+    styleSheet;
+
+    /**
+     * The translator of the EPUB contents, null if unknown or no translator.
+     * 
+     * @type { string | null }
+     * @public
+     */
+    translator;
+
+    /**
+     * The EPUB author fetched from the UI input; or null if not set.
+     * 
+     * @type { string | null }
+     * @public
+     */
+    fileAuthorAs;
+
+    /**
+     * @public
+     */
     constructor() {
         this.uuid = UIText.Default.uuid;
         this.title = UIText.Default.title;
@@ -30,10 +130,25 @@ class EpubMetaInfo {
         this.fileAuthorAs = null;
     }
 
+    /**
+     * Get `this.fileAuthorAs`, or use `this.author` as fallback.
+     * 
+     * @returns { string } The found author.
+     * 
+     * @public
+     */
     getFileAuthorAs() {
+        // FIXME: Should this also check for undefined?
         return (this.fileAuthorAs === null) ? this.author : this.fileAuthorAs;
     }
 
+    /**
+     * Get the default stylesheet for a created epub.
+     * 
+     * @returns { string } The stylesheet as a literal string.
+     * 
+     * @public
+     */
     static getDefaultStyleSheet() {
         return ""+
         // Style for svg images. I got this from BTE-Gen epunbs. Works nicely.
@@ -155,6 +270,19 @@ class EpubMetaInfo {
         "}";
     }
 
+    /**
+     * Generate `EpubAddMetaInfo` from novel updates or error out.
+     * 
+     * NOTE: This kinda throws by calling out to `ErrorLog` if the url
+     *       isn't novelupdates.
+     * 
+     * @param { ParentNode } dom The dom to extract information from. 
+     * @param { UrlString } url The url to use to look for info.
+     * @param { boolean } allTags Whether to look for all tags.
+     * @returns { EpubAddMetaInfo } The found information.
+     * 
+     * @public
+     */
     static getEpubMetaAddInfo(dom, url, allTags) {
         let metaAddInfo = new EpubAddMetaInfo();
 
@@ -167,45 +295,99 @@ class EpubMetaInfo {
             let test = "Error: Fetch of URL '" + url + "' failed to fetch please check if website is novelupdates.com";
             ErrorLog.showErrorMessage(test);
         }
+
         return metaAddInfo;
     }
-    
+
+    /**
+     * Extract tags based on novelupdates specific selectors.
+     * 
+     * @param { ParentNode } dom The node to look for tags in.
+     * @param { boolean } allTags Whether to look for all tags.
+     * @returns { string } The found tags as a comma separated string.
+     * 
+     * @private
+     */
     static addSubjectNovelupdate(dom, allTags) {
         let selector = "#seriesgenre .genre";
+
         if (allTags) {
             selector += ", #showtags .genre";
         }
+
         return EpubMetaInfo.buildSubjectFromTags(dom, selector);
     }
 
+    /**
+     * Try to find and clean up description from `dom`.
+     * 
+     * @param { ParentNode } dom The node to look for the description in.
+     * @returns { string } The found description.
+     * 
+     * @private
+     */
     static addDescriptionNovelupdate(dom) {
         return dom.querySelector("#editdescription").textContent.replace(/\n+/g, "\n").replace(/\n/g, "\n\n");
     }
     
+    /**
+     * Extract author from novelupdates node.
+     * 
+     * @param { ParentNode } dom The node to extract author from.
+     * @returns { string } The found author.
+     * 
+     * @private
+     */
     static addAuthorNovelupdate(dom) {
         return dom.querySelector("#authtag").textContent;
     }
 
+    /**
+     * Extract tags and compile them into a single comma separated string.
+     * 
+     * @param { ParentNode } dom The node to look for the tags in.
+     * @param { string } selector The selector to use to find tags.
+     * @returns { string } Comma separated string of all found tags.
+     * 
+     * @private
+     */
     static buildSubjectFromTags(dom, selector) {
         return [...dom.querySelectorAll(selector)]
             .map(e => EpubMetaInfo.decensor(e.textContent.trim()))
             .join(", ");
     }
 
+    /**
+     * Get uncensored version of known tags.
+     * 
+     * @param { string } tag The potentially censored tag.
+     * @returns { string } The uncensored tag, or unchanged if it wasn't censored.
+     * 
+     * @private
+     */
     static decensor(tag) {
         if (tag.includes("*")) {
             for (let j = 0; j < EpubMetaInfo.decensorList.length; j += 2) {
                 let cyphertext = EpubMetaInfo.decensorList[j];
                 let cleartext = EpubMetaInfo.decensorList[j + 1];
+
                 if (tag.includes(cyphertext)) {
                     tag = tag.replace(cyphertext, cleartext);
                 }
             }
         }
+
         return tag;
     }
 }
 
+/**
+ * Pairs of terms, first being the censored term, and second being the
+ * corresponding uncensored term.
+ * 
+ * @type { string[] }
+ * @public
+ */
 EpubMetaInfo.decensorList = [
     "Ab*se", "Abuse",
     "An*l", "Anal",
@@ -243,13 +425,43 @@ EpubMetaInfo.decensorList = [
     "s*x", "sex",
     "Su*cide", "Suicide",
     "Tr*sh", "Trash",
-    "Virg*n", "Virgin"];
+    "Virg*n", "Virgin"
+];
 
+/**
+ * Class container for additional meta information, such as from Novelupdates.
+ */
 class EpubAddMetaInfo {
+    /**
+     * The epub/novel subject or tag line.
+     * 
+     * @type { string }
+     * @public
+     */
+    subject;
+
+    /**
+     * The epub/novel description.
+     * 
+     * @type { string }
+     * @public
+     */
+    description;
+
+    /**
+     * The author(s) name.
+     * 
+     * @type { string }
+     * @public
+     */
+    author;
+
+    /**
+     * @public
+     */
     constructor() {
         this.subject = "";
         this.description = "";
         this.author = "";
     }
 }
-
