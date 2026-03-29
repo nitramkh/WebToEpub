@@ -35,7 +35,7 @@ class DefaultParser extends Parser {
     }
 
     /**
-     * @inheritdoc
+     * Function for fetching the links to **all** chapters.
      * 
      * @override
      * @param { Document } dom The DOM of the main/first page.
@@ -48,7 +48,7 @@ class DefaultParser extends Parser {
     }
 
     /**
-     * @inheritdoc
+     * Function for extracting the chapter content from the chapter dom.
      * 
      * @override
      * @param { Document } dom The dom of the chapter page.
@@ -63,7 +63,7 @@ class DefaultParser extends Parser {
     }
 
     /**
-     * @inheritdoc
+     * Override to setup default parser.
      * 
      * @override
      * @param { Document } dom The DOM of the first page; e.g. chapter list container page.
@@ -78,17 +78,13 @@ class DefaultParser extends Parser {
     }
 
     /**
-     * Override default (keep nearly everything, may be wanted)
-     * 
-     * ***
-     * 
-     * @inheritdoc
+     * Override default (keep nearly everything, may be wanted).
      * 
      * @override
      * @param { Element } element The element to remove from.
      * @returns { void } Changes are made on the provided `element` object.
      * 
-     * @protected
+     * @public
      */
     removeUnwantedElementsFromContentElement(element) {
         util.removeElements(element.querySelectorAll("script[src], iframe"));
@@ -99,7 +95,8 @@ class DefaultParser extends Parser {
     }
 
     /**
-     * @inheritdoc
+     * Element with title of an individual chapter. Override this when the
+     * chapter title not in content element.
      * 
      * @override
      * @param { Document } dom The full dom of the chapter page.
