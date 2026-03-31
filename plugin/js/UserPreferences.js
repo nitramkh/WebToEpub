@@ -4,28 +4,62 @@
 
 "use strict";
 
-/** Holds a single preference value for user  */
+/**
+ * Holds a single preference value for user.
+ * 
+ * FIXME: Refactor Userpreferences into actual generic types; and hide Bool/String concrete implementations.
+ * 
+ * @template T
+ * @abstract
+ */
 class UserPreference {
+    /**
+     * @type { T }
+     */
+    value;
+
+    /**
+     * @param { UserPreferenceKeyString } storageName 
+     * @param { HTMLIDString } uiElementName 
+     * @param { T } defaultValue 
+     */
     constructor(storageName, uiElementName, defaultValue) {
         this.storageName = storageName;
         this.uiElementName = uiElementName;
         this.value = defaultValue;
     }
 
+    /**
+     * @returns { HTMLElement | null }
+     */
     getUiElement() {
         return document.getElementById(this.uiElementName);
     }
 
+    /**
+     * @returns { void }
+     */
     writeToLocalStorage() {
         window.localStorage.setItem(this.storageName, this.value);
     }
 }
 
+/**
+ * @extends { UserPreference<boolean> }
+ */
 class BoolUserPreference extends UserPreference {
+    /**
+     * @param { UserPreferenceKeyString} storageName 
+     * @param { HTMLIDString } uiElementName 
+     * @param { boolean } defaultValue 
+     */
     constructor(storageName, uiElementName, defaultValue) {
         super(storageName, uiElementName, defaultValue);
     }
 
+    /**
+     * @returns { void }
+     */
     readFromLocalStorage() {
         let test = window.localStorage.getItem(this.storageName);
         if (test !== null) {
@@ -33,24 +67,46 @@ class BoolUserPreference extends UserPreference {
         }
     }
 
+    /**
+     * @returns { void }
+     */
     readFromUi() {
         this.value = this.getUiElement().checked;
     }
 
+    /**
+     * @returns { void }
+     */
     writeToUi() {
         this.getUiElement().checked = this.value;
     }
 
+    /**
+     * @param { (this: GlobalEventHandlers, ev: PointerEvent) => any } readFromUi 
+     * @returns { void }
+     */
     hookupUi(readFromUi) {
         this.getUiElement().onclick = readFromUi;
     }
 }
 
+/**
+ * @extends { UserPreference<string> }
+ */
 class StringUserPreference extends UserPreference {
+    /**
+     * 
+     * @param { UserPreferenceKeyString } storageName 
+     * @param { HTMLIDString } uiElementName 
+     * @param { string } defaultValue 
+     */
     constructor(storageName, uiElementName, defaultValue) {
         super(storageName, uiElementName, defaultValue);
     }
 
+    /**
+     * @returns { void }
+     */
     readFromLocalStorage() {
         let test = window.localStorage.getItem(this.storageName);
         if (test !== null) {
@@ -58,14 +114,24 @@ class StringUserPreference extends UserPreference {
         }
     }
 
+    /**
+     * @returns { void }
+     */
     readFromUi() {
         this.value = this.getUiElement().value;
     }
 
+    /**
+     * @returns { void }
+     */
     writeToUi() {
         this.getUiElement().value = this.value;
     }
 
+    /**
+     * @param { (this: GlobalEventHandlers, ev: Event) => any } readFromUi 
+     * @returns { void }
+     */
     hookupUi(readFromUi) {
         let uiElement = this.getUiElement();
         if (uiElement.tagName === "SELECT") {
@@ -78,6 +144,21 @@ class StringUserPreference extends UserPreference {
 
 /** The collection of all preferences for user  */
 class UserPreferences { // eslint-disable-line no-unused-vars
+    /**
+     * @type { (BoolUserPreference | StringUserPreference)[] }
+     */
+    preferences;
+
+    /**
+     * @type { UserPreferencesObserver[] }
+     */
+    observers;
+
+    /**
+     * @type { ReadingList }
+     */
+    readingList;
+
     constructor() {
         this.preferences = [];
         this.observers = [];
@@ -132,17 +213,27 @@ class UserPreferences { // eslint-disable-line no-unused-vars
         document.getElementById("themeColorTag").addEventListener("change", UserPreferences.SetTheme);
     }
 
-    /** @private */
+    /**
+     * @template { boolean | string } T
+     * @param { UserPreferenceKeyString } storageName
+     * @param { HTMLIDString } uiElementName
+     * @param { T } defaultValue
+     * @return { T extends string ? StringUserPreference : BoolUserPreference }
+     * @private
+     */
     addPreference(storageName, uiElementName, defaultValue) {
         let preference = null;
+
         if (typeof(defaultValue) === "boolean") {
-            preference = new BoolUserPreference(storageName, uiElementName, defaultValue);
+            preference = /** @type {T extends string ? StringUserPreference : BoolUserPreference} */ (new BoolUserPreference(storageName, uiElementName, defaultValue));
         } else if (typeof(defaultValue) === "string") {
-            preference = new StringUserPreference(storageName, uiElementName, defaultValue);
+            preference = /** @type {T extends string ? StringUserPreference : BoolUserPreference} */ (new StringUserPreference(storageName, uiElementName, defaultValue));
         } else {
             throw new Error("Unknown preference type");
         }
+
         this.preferences.push(preference);
+
         return preference;
     }
 
@@ -162,6 +253,10 @@ class UserPreferences { // eslint-disable-line no-unused-vars
         this.readingList.writeToLocalStorage();
     }
 
+    /**
+     * @param { UserPreferencesObserver } observer 
+     * @returns { void }
+     */
     addObserver(observer) {
         this.observers.push(observer);
         this.notifyObserversOfChange();
@@ -176,6 +271,9 @@ class UserPreferences { // eslint-disable-line no-unused-vars
         this.notifyObserversOfChange();
     }
 
+    /**
+     * @returns { void }
+     */
     notifyObserversOfChange() {
         for (let observer of this.observers) {
             observer.onUserPreferencesUpdate(this);
@@ -268,13 +366,20 @@ class UserPreferences { // eslint-disable-line no-unused-vars
         }
     }
 
+    /**
+     * @param { UrlString } url Url to the main ToC page used.
+     * @returns { void }
+     */
     setReadingListCheckbox(url) {
         let inlist = this.readingList.getEpub(url) != null;
         UserPreferences.getReadingListCheckbox().checked = inlist;
     }
 
+    /**
+     * @returns { HTMLInputElement | null }
+     */
     static getReadingListCheckbox() {
-        return document.getElementById("includeInReadingListCheckbox");
+        return /** @type { HTMLInputElement | null } */ (document.getElementById("includeInReadingListCheckbox"));
     }
 
     static SetTheme() {

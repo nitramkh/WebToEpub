@@ -608,6 +608,13 @@ class FetchResponseHandler {
     contentType;
 
     /**
+     * The response parsed as XML/HTML.
+     * 
+     * @type { Document | undefined }
+     */
+    responseXML;
+
+    /**
      * The response parsed into json.
      * 
      * @type { string | undefined }

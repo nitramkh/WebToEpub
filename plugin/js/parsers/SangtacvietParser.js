@@ -11,6 +11,8 @@ class SangtacvietParser extends Parser {
 
     async getChapterUrls(dom) {
         let hostname = new URL(dom.baseURI).hostname;
+        
+        /** @type { chrome.declarativeNetRequest.Rule[] } */
         let rule = 
         [{
             "id": 1,

@@ -70,6 +70,15 @@ class WtrlabParser extends Parser {
     }
 
 
+    /**
+     * Seemingly only sets {@link img} if it can find it.
+     * 
+     * FIXME: Ehm this doesn't seem right.
+     * 
+     * @param { Document } dom The DOM of the first page; e.g. chapter list container page.
+     * @returns { Promise<void> }
+     * @throws { SyntaxError } If it fails to parse JSON.
+     */
     async loadEpubMetaInfo(dom) {
         let json = dom.querySelector("script#__NEXT_DATA__")?.textContent;
         json = JSON.parse(json);

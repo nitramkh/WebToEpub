@@ -3,34 +3,78 @@
 */
 "use strict";
 
-var LibFileReader = new FileReader();
+/**
+ * @type { LibFileReader }
+ */
+var LibFileReader = /** @type { LibFileReader } */ (new FileReader());
 
 class Library { // eslint-disable-line no-unused-vars
-    constructor() {
-    }
+    /**
+     * @type { UserPreferences | undefined }
+     */
+    static userPreferences;
+
+    /**
+     * @public
+     */
+    constructor() {  }
     
+    /**
+     * Update the user preferences reference.
+     * 
+     * @param { UserPreferences } userPreferences The new preferences.
+     * @returns { void } Changes are made on state directly.
+     * 
+     * @public
+     */
     onUserPreferencesUpdate(userPreferences) {
         Library.userPreferences = userPreferences;
     }
     
+    /**
+     * 
+     * 
+     * @param { Blob } AddEpub 
+     * @param { FilenameString } fileName 
+     * @param { string } startingUrlInput 
+     * @param { boolean } overwriteExisting 
+     * @param { boolean } backgroundDownload 
+     * @returns 
+     * 
+     * @public
+     */
     async LibAddToLibrary(AddEpub, fileName, startingUrlInput, overwriteExisting, backgroundDownload) {
         Library.LibShowLoadingText();
-        Library.userPreferences.readingList.addEpub(document.getElementById("startingUrlInput").value);
+
+        Library.userPreferences.readingList.addEpub(/** @type { HTMLInputElement | null } */ (document.getElementById("startingUrlInput")).value);
+
         let CurrentLibStoryURLKeys = await Library.LibGetAllLibStorageKeys("LibStoryURL");
         let CurrentLibStoryURLs = await Library.LibGetFromStorageArray(CurrentLibStoryURLKeys);
+
+        /** @type { string | -1 } */
         let LibidURL = -1;
+
         for (let i = 0; i < CurrentLibStoryURLKeys.length; i++) {
             if (CurrentLibStoryURLs[CurrentLibStoryURLKeys[i]] == startingUrlInput) {
                 LibidURL = CurrentLibStoryURLKeys[i].replace("LibStoryURL","");
                 continue;
             }
         }
+
         if (LibidURL == -1) {
-            Library.LibHandleUpdate(-1, AddEpub, document.getElementById("startingUrlInput").value, fileName.replace(".epub", ""), LibidURL);
-            if (document.getElementById("LibDownloadEpubAfterUpdateCheckbox").checked) {
+            // FIXME: Should this be awaited?
+            Library.LibHandleUpdate(
+                -1,
+                AddEpub,
+                /** @type { HTMLInputElement | null } */ (document.getElementById("startingUrlInput")).value,
+                fileName.replace(".epub", ""),
+                LibidURL
+            );
+
+            if (/** @type { HTMLInputElement | null } */ (document.getElementById("LibDownloadEpubAfterUpdateCheckbox")).checked) {
                 return Download.save(AddEpub, fileName, overwriteExisting, backgroundDownload);
             } else {
-                return new Promise((resolve) => {resolve();});
+                return new Promise((resolve) => { resolve(); });
             }
         }
 
@@ -53,6 +97,13 @@ class Library { // eslint-disable-line no-unused-vars
         return Math.max(...array);
     }
 
+    /**
+     * 
+     * @param {*} PreviousEpubBase64 
+     * @param {*} AddEpubBlob 
+     * @param { string | number } LibidURL 
+     * @returns 
+     */
     static async LibMergeEpub(PreviousEpubBase64, AddEpubBlob, LibidURL) {
         Library.LibShowLoadingText();
 
@@ -468,7 +519,7 @@ class Library { // eslint-disable-line no-unused-vars
                 document.getElementById("LibImportLibraryFile").addEventListener("change", function() {Library.LibHandelImport(this);});
                 document.getElementById("LibUploadEpubLabel").addEventListener("mouseover", function() {Library.LibMouseoverButtonUpload(this);});
                 document.getElementById("LibUploadEpubLabel").addEventListener("mouseout", function() {Library.LibMouseoutButtonUpload(this);});
-                document.getElementById("LibEpubNewUploadFile").addEventListener("change", function() {Library.LibHandleUpdate(this, -1, "", "", -1);});
+                /** @type { HTMLInputElement | null } */ (document.getElementById("LibEpubNewUploadFile")).addEventListener("change", function() {Library.LibHandleUpdate(this, -1, "", "", -1);});
                 document.getElementById("LibAddListToLibraryButton").addEventListener("click", function() {Library.LibAddListToLibrary();});
             }
             for (let i = 0; i < CurrentLibKeys.length; i++) {
@@ -675,27 +726,52 @@ class Library { // eslint-disable-line no-unused-vars
         }
     }
 
+    /**
+     * Show loading text in UI.
+     * 
+     * @returns { void } Changes are made on UI directly.
+     * 
+     * @private
+     */
     static LibShowLoadingText() {
-        let LibRenderResult = document.getElementById("LibRenderResult");
+        let LibRenderResult = /** @type { HTMLDivElement | null } */ (document.getElementById("LibRenderResult"));
+
         let LibRenderString = "";
         LibRenderString += "<div class='LibDivRenderWraper'>";
         LibRenderString += "<div class='warning'>";
         LibRenderString += document.getElementById("LibTemplateWarningInProgress").innerHTML;
         LibRenderString += "</div>";
         LibRenderString += "</div>";
+
         Library.AppendHtmlInDiv(LibRenderString, LibRenderResult, "LibDivRenderWraper");
     }
 
+    /**
+     * Update `LibFileReader` with new data.
+     * 
+     * @param { HTMLInputElement | -1 } objbtn The file input which triggered the update; or -1 for none.
+     * @param { Blob | File | -1 } Blobdata The new data; overridden by `objbtn.files[0]` if provided.
+     * @param { UrlString} StoryURL The story url to set.
+     * @param { FilenameString } Filename The filename
+     * @param { string | number } Id The storage id.
+     * @param { number } [NewChapterCount] The new chapter count; defaults to 0.
+     * @returns { Promise<void> } Promise which resolves when changes are complete.
+     * 
+     * @private
+     */
     static async LibHandleUpdate(objbtn, Blobdata, StoryURL, Filename, Id, NewChapterCount) {
         Library.LibShowLoadingText();
         Library.LibFileReaderAddListeners();
+
         if (objbtn != -1) {
             Blobdata = objbtn.files[0];
             Filename = Blobdata.name.replace(".epub", "");
         }
+
         if (NewChapterCount == null) {
             NewChapterCount = 0;
         }
+
         LibFileReader.LibStorageValueURL = StoryURL;
         LibFileReader.LibStorageValueFilename = Filename;
         LibFileReader.LibStorageValueId = Id;
@@ -783,6 +859,13 @@ class Library { // eslint-disable-line no-unused-vars
         return retblob;
     }
 
+    /**
+     * Remove any old event listeners and attach new ones.
+     * 
+     * @returns { void } Changes are made on UI directly.
+     * 
+     * @private
+     */
     static LibFileReaderAddListeners() {
         LibFileReader.removeEventListener("load", Library.LibFileReaderloadImport);
         LibFileReader.removeEventListener("error", function(event) {Library.LibFileReadererror(event);});
@@ -1041,31 +1124,55 @@ class Library { // eslint-disable-line no-unused-vars
         document.getElementById("LibURLWarning"+obj.dataset.libepubid).innerHTML = "<tr><td></td></tr>";
     }
 
+    /**
+     * Find all existing storage keys which include the `Substring`.
+     * 
+     * @param { string } Substring The string to look for to find relevant keys.
+     * @param { string[] } [AllStorageKeysList] List of all keys; if not present it will fetch all keys and extract from that.
+     * @returns { Promise<string[]> } Promise which resolves to the found keys matching the `Substring`.
+     * 
+     * @private
+     */
     static async LibGetAllLibStorageKeys(Substring, AllStorageKeysList) {
         return new Promise((resolve) => {
             if (AllStorageKeysList == undefined) {
                 chrome.storage.local.get(null, function(items) {
                     let AllStorageKeys = Object.keys(items);
+
+                    /** @type { string[] } */
                     let AllLibStorageKeys = [];
+
                     for (let i = 0, end = AllStorageKeys.length; i < end; i++) {
                         if (AllStorageKeys[i].includes(Substring)) {
                             AllLibStorageKeys.push(AllStorageKeys[i]);
                         }   
                     }
+
                     resolve(AllLibStorageKeys);
                 });
             } else {
+                /** @type { string[] } */
                 let AllLibStorageKeys = [];
+
                 for (let i = 0, end = AllStorageKeysList.length; i < end; i++) {
                     if (AllStorageKeysList[i].includes(Substring)) {
                         AllLibStorageKeys.push(AllStorageKeysList[i]);
                     }   
                 }
+
                 resolve(AllLibStorageKeys);
             }
         });
     }
 
+    /**
+     * Fetch the values for all provided keys.
+     * 
+     * @param { string[] } Keys The keys to fetch values for.
+     * @returns { Promise<{ [key: string]: unknown }> } Promise which resolves to a key-value map of values for the provided keys.
+     * 
+     * @private
+     */
     static async LibGetFromStorageArray(Keys) {
         return new Promise((resolve) => {
             chrome.storage.local.get(Keys, function(items) {
@@ -1082,11 +1189,24 @@ class Library { // eslint-disable-line no-unused-vars
         });
     }
 
-    static AppendHtmlInDiv(HTMLstring, DivObjectInject, DivClassWraper ) {
+    /**
+     * Extract children from `HTMLString` with the `DivClassWraper` class and
+     * insert them into `DivObjectInject`; removing any old children.
+     * 
+     * @param { string } HTMLstring The html to take from.
+     * @param { HTMLDivElement } DivObjectInject The element to insert into.
+     * @param { string } DivClassWraper The class of the children to look for and insert.
+     * @returns { void } Changes are made on `DivObjectInject` directly.
+     * 
+     * @private
+     */
+    static AppendHtmlInDiv(HTMLstring, DivObjectInject, DivClassWraper) {
         let parsed = util.sanitize(HTMLstring);
         let tags = parsed.getElementsByClassName(DivClassWraper);
+
         DivObjectInject.innerHTML = "";
-        for (let  tag of tags) {
+
+        for (let tag of tags) {
             DivObjectInject.appendChild(tag);
         }
     }

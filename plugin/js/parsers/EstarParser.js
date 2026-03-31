@@ -8,6 +8,7 @@ class EstarParser extends Parser {
     }
 
     async getChapterUrls(dom) {
+        /** @type { chrome.declarativeNetRequest.Rule[] } */
         let rule = 
         [{
             "id": 1,

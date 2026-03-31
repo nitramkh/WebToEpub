@@ -1,11 +1,17 @@
-/*
-    Main processing handler for popup.html
-
-*/
+/**
+ * Main processing handler for popup.html
+ */
 var main = (function() {
     "use strict";
 
-    // this will be called when message listener fires
+    /**
+     * this will be called when message listener fires
+     * 
+     * @param { any } message The recieved message; not yet confirmed from the injected script.
+     * @param { chrome.runtime.MessageSender } sender 
+     * @param { (response?: any) => void } sendResponse 
+     * @returns { void }
+     */
     function onMessageListener(message, sender, sendResponse) {  // eslint-disable-line no-unused-vars
         if (message.messageType == "ParseResults") {
             chrome.runtime.onMessage.removeListener(onMessageListener);
@@ -17,13 +23,34 @@ var main = (function() {
         }
     }
 
-    // details 
+    /**
+     * The DOM of the first page; e.g. chapter list container page.
+     * 
+    * @type { Document | null }
+     */ 
     let initialWebPage = null;
+
+    /**
+     * @type { Parser | null | undefined }
+     */
     let parser = null;
+
+    /**
+     * @type { UserPreferences | null }
+     */
     let userPreferences = null;
+
+    /**
+     * @type { Library }
+     */
     let library = new Library; 
 
-    // register listener that is invoked when script injected into HTML sends its results
+    /**
+     * Register listener that is invoked when script injected into HTML sends
+     * its results.
+     * 
+     * @returns { void }
+     */
     function addMessageListener() {
         try {
             // note, this will throw if not running as an extension.
@@ -35,7 +62,13 @@ var main = (function() {
         }
     }
 
-    // extract urls from DOM and populate control
+    /**
+     * Extract urls from DOM and populate control.
+     * 
+     * @param { UrlString } url Url to the main ToC page used.
+     * @param { Document } dom The DOM of the first page; e.g. chapter list container page.
+     * @returns { Promise<void> }
+     */
     async function processInitialHtml(url, dom) {
         if (setParser(url, dom)) {
             try {
@@ -46,7 +79,9 @@ var main = (function() {
             }
             try {
                 await parser.loadEpubMetaInfo(dom);
+
                 let metaInfo = parser.getEpubMetaInfo(dom, userPreferences.useFullTitle.value);
+
                 populateMetaInfo(metaInfo);
                 setUiToDefaultState();
                 parser.populateUI(dom);
@@ -61,6 +96,9 @@ var main = (function() {
         }
     }
 
+    /**
+     * @returns { void }
+     */
     function setUiToDefaultState() {
         document.getElementById("highestResolutionImagesRow").hidden = true;
         document.getElementById("unSuperScriptAlternateTranslations").hidden = true; 
@@ -71,6 +109,11 @@ var main = (function() {
         document.getElementById("defaultParserSection").hidden = true;
     }
 
+    /**
+     * Displays information from metaInfo in UI.
+     * 
+     * @param { EpubMetaInfo } metaInfo 
+     */
     function populateMetaInfo(metaInfo) {
         setUiFieldToValue("startingUrlInput", metaInfo.uuid);
         setUiFieldToValue("titleInput", metaInfo.title);
@@ -90,17 +133,30 @@ var main = (function() {
         setUiFieldToValue("fileAuthorAsInput", metaInfo.fileAuthorAs);
     }
 
+    /**
+     * Sets the value of a field in the UI.
+     * 
+     * @param { HTMLIDString } elementId 
+     * @param { string | null } value
+     * @throws { Error } If the provided id is bad. 
+     */
     function setUiFieldToValue(elementId, value) {
         let element = document.getElementById(elementId);
         if (util.isTextInputField(element) || util.isTextAreaField(element)) {
-            element.value = (value == null) ? "" : value;
+            /** @type { HTMLInputElement | HTMLTextAreaElement } */ (element).value = (value == null) ? "" : value;
         } else {
             throw new Error(UIText.Error.unhandledFieldTypeError);
         }
     }
 
+    /**
+     * Builds a new {@link EpubMetaInfo} from the contents of UI.
+     * 
+     * @returns { EpubMetaInfo }
+     */
     function metaInfoFromControls() {
         let metaInfo = new EpubMetaInfo();
+
         metaInfo.uuid = getValueFromUiField("startingUrlInput");
         metaInfo.title = getValueFromUiField("titleInput");
         metaInfo.author = getValueFromUiField("authorInput");
@@ -121,17 +177,34 @@ var main = (function() {
         return metaInfo;
     }
 
+    /**
+     * Fetches a value from a UI field.
+     * 
+     * @param { HTMLIDString } elementId 
+     * @returns { string | null }
+     */
     function getValueFromUiField(elementId) {
         let element = document.getElementById(elementId);
-        if (util.isTextInputField(element) || util.isTextAreaField(element)) {
-            return (element.value === "") ? null : element.value;
+
+        if (element != null && (util.isTextInputField(element) || util.isTextAreaField(element))) {
+            const input = /** @type { HTMLInputElement | HTMLTextAreaElement } */ (element);
+
+            // FIXME: This should probably check for pure whitespace as well?
+            return (input.value === "") ? null : input.value;
         } else {
             throw new Error(UIText.Error.unhandledFieldTypeError);
         }
     }
 
+    /**
+     * The main handler for downloading the chapters and creating the epub.
+     * 
+     * @this { DatasetContext | undefined }
+     * @returns { Promise<void> }
+     */
     async function fetchContentAndPackEpub() {
         let libclick = this;
+
         if (document.getElementById("noAdditionalMetadataCheckbox").checked == true) {
             setUiFieldToValue("subjectInput", "");
             setUiFieldToValue("descriptionInput", "");
@@ -148,22 +221,32 @@ var main = (function() {
         ChapterUrlsUI.limitNumOfChapterS(userPreferences.maxChaptersPerEpub.value);
         ChapterUrlsUI.resetDownloadStateImages();
         ErrorLog.clearHistory();
+
         window.workInProgress = true;
         main.getPackEpubButton().disabled = true;
         replaceLibAddToLibrary();
+
         parser.onStartCollecting();
         await parser.fetchContent();
         let content = await packEpub(metaInfo);
+        
         // Enable button here.  If user cancels save dialog
         // the promise never returns
         window.workInProgress = false;
         main.getPackEpubButton().disabled = false;
         replaceLibAddToLibrary();
+
         let overwriteExisting = userPreferences.overwriteExistingEpub.value;
         let backgroundDownload = userPreferences.noDownloadPopup.value;
         let fileName = Download.CustomFilename();
         if ("yes" == libclick.dataset.libclick || util.sleepController.signal.aborted) {
-            await library.LibAddToLibrary(content, fileName, document.getElementById("startingUrlInput").value, overwriteExisting, backgroundDownload);
+            await library.LibAddToLibrary(
+                content,
+                fileName,
+                /** @type { HTMLInputElement | null } */ (document.getElementById("startingUrlInput")).value,
+                overwriteExisting,
+                backgroundDownload
+            );
         } else {
             await Download.save(content, fileName, overwriteExisting, backgroundDownload);
         }
@@ -190,6 +273,11 @@ var main = (function() {
         }
     }
 
+    /**
+     * Swap the library buttons.
+     * 
+     * @returns { void }
+     */
     function replaceLibAddToLibrary() {
         let el = document.getElementById("LibAddToLibrary");
         el.hidden = !el.hidden;
@@ -201,14 +289,26 @@ var main = (function() {
         util.sleepController.abort();
     }
 
+    /**
+     * Get the preferred epub version.
+     * 
+     * @returns { string } The preferred version.
+     */
     function epubVersionFromPreferences() {
         return userPreferences.createEpub3.value ? 
             EpubPacker.EPUB_VERSION_3 : EpubPacker.EPUB_VERSION_2;
     }
 
+    /**
+     * Pack the epub into a zip blob.
+     * 
+     * @param { EpubMetaInfo } metaInfo The meta info to use inside the epub.
+     * @returns { Promise<Blob> } The (future) blob of the entire packed epub.
+     */
     function packEpub(metaInfo) {
         let epubVersion = epubVersionFromPreferences();
         let epub = new EpubPacker(metaInfo, epubVersion);
+
         return epub.assemble(parser.epubItemSupplier());
     }
 
@@ -269,20 +369,37 @@ var main = (function() {
         return !util.isNullOrEmpty(search);
     }
 
+    /**
+     * @param { UrlString } url Url to the first ToC page.
+     * @param { Document } dom The DOM of the first page; e.g. chapter list container page.
+     */
     async function populateControlsWithDom(url, dom) {
         initialWebPage = dom;
+
+        // Show the used main ToC page in UI.
         setUiFieldToValue("startingUrlInput", url);
 
         // set the base tag, in case server did not supply it 
         util.setBaseTag(url, initialWebPage);
+
         await processInitialHtml(url, initialWebPage);
+
         if (document.getElementById("autosearchmetadataCheckbox").checked == true) {
             await autosearchadditionalmetadata();
         }
     }
 
+    /**
+     * Attempt to find a parser for a page. If one is found it sets
+     * {@link parser} to an instance of the found parser.
+     * 
+     * @param { UrlString } url Url to the main ToC page used.
+     * @param { Document } dom The DOM of the first page; e.g. chapter list container page.
+     * @returns { boolean } Whether a parser for the page was found.
+     */
     function setParser(url, dom) {
         let manualSelect = getManuallySelectParserTag().value;
+
         if (util.isNullOrEmpty(manualSelect)) {
             parser = parserFactory.fetch(url, dom);
         } else {
@@ -292,12 +409,15 @@ var main = (function() {
             ErrorLog.showErrorMessage(UIText.Error.noParserFound);
             return false;
         }
+
         getLoadAndAnalyseButton().hidden = true;
+
         let disabledMessage = parser.disabled();
         if (disabledMessage !== null) {
             ErrorLog.showErrorMessage(disabledMessage);
             return false;
         }
+
         return true;
     }
 
@@ -363,13 +483,28 @@ var main = (function() {
         });
     }
 
+    /**
+     * Load first chapter ToC page via XHR request using the url currently
+     * provided in the ui.
+     * 
+     * @this { DatasetContext | undefined } Context from either button; or emulated injectable.
+     * @returns { Promise<void> } Changes are made on state directly.
+     */
     async function onLoadAndAnalyseButtonClick() {
-        // load page via XmlHTTPRequest
+        // Url to first ToC page from UI field.
         let url = getValueFromUiField("startingUrlInput");
         getLoadAndAnalyseButton().disabled = true;
+
         try {
+            if (url == null || !util.isUrl(url))
+                throw new Error("Found url was null or not an url."); // FIXME: Do this better.
+
             let xhr = await HttpClient.wrapFetch(url);
-            await populateControlsWithDom(url, xhr.responseXML);
+
+            await populateControlsWithDom(
+                /** @type { UrlString } */ (url),
+                xhr.responseXML
+            );
             getLoadAndAnalyseButton().disabled = false;
         } catch (error) {
             getLoadAndAnalyseButton().disabled = false;
@@ -388,12 +523,18 @@ var main = (function() {
         }
     }
 
+    /**
+     * @returns { HTMLButtonElement | null }
+     */
     function getPackEpubButton() {
-        return document.getElementById("packEpubButton");
+        return /** @type { HTMLButtonElement | null } */(document.getElementById("packEpubButton"));
     }
 
+    /**
+     * @returns { HTMLButtonElement | null }
+     */
     function getLoadAndAnalyseButton() {
-        return document.getElementById("loadAndAnalyseButton");
+        return /** @type { HTMLButtonElement | null } */ (document.getElementById("loadAndAnalyseButton"));
     }
 
     function resetUI() {
@@ -430,7 +571,7 @@ var main = (function() {
     }
 
     function getManuallySelectParserTag() {
-        return document.getElementById("manuallySelectParserTag");
+        return /** @type { HTMLSelectElement | null } */ (document.getElementById("manuallySelectParserTag"));
     }
 
     function getAdditionalMetadataSection() {
@@ -547,7 +688,11 @@ var main = (function() {
     }
 	
 	
-    // Additional metadata
+    /**
+     * Additional metadata.
+     * 
+     * @returns { Promise<void> }
+     */
     async function autosearchadditionalmetadata() {
         getPackEpubButton().disabled = true;
         document.getElementById("LibAddToLibrary").disabled = true;
